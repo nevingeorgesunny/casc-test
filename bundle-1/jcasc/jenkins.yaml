@@ -1,0 +1,51 @@
+jenkins:
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+      - id: admin
+        name: Administrator
+        password: ${readFile:/var/login/password}
+      - id: developer
+        name: Developer
+        password: ${readFile:/var/login/password}
+      - id: browser
+        name: Browser
+        password: ${readFile:/var/login/password}
+  authorizationStrategy: "cloudBeesRoleBasedAccessControl"
+  numExecutors: 0
+  views:
+  - all:
+      name: all
+unclassified:
+  cascAutoControllerProvisioning:
+    provisionControllerOnCreation: true
+    fireAndForget: true
+    initialDelay: 1
+    duration: 1
+notificationConfiguration:
+  enabled: true
+  router: operationsCenter
+masterprovisioning:
+  dockerImageDefinitionConfiguration:
+    images:
+    - name: dev
+      imageTag: cbci-test-10689/core-mm:dev-d89b16f611370a8c71d513d234e5667d
+  kubernetes:
+    clusterEndpoints:
+    - id: "default"
+      name: "kubernetes"
+      jenkinsUrl: "http://cjoc/cjoc/"
+      serviceExposure:
+        ingress:
+          ingressClass: nginx
+      resourceHost: "resources.localtest.me"
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              id: oc-shared-credentials
+              username: shared
+              password: s3cr3t
+              scope: GLOBAL
