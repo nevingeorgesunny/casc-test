@@ -1,8 +1,0 @@
-plugins:
-- id: cloudbees-casc-client
-- id: cloudbees-casc-items-server
-- id: configuration-as-code
-- id: notification-api
-- id: operations-center-jnlp-controller
-- id: operations-center-notification
-- id: operations-center-rbac
