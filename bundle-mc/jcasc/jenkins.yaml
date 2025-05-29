@@ -70,7 +70,7 @@ jenkins:
         inbound: {}
       nodeDescription: |-
         If using a public cloud:
-        The quick brown cat jumps over the lazy dog docker run --rm --entrypoint java us-east1-docker.pkg.dev/tiger-team-testing/cbci-nsunny-5650/agent:dev-52bc044c93bd7a8dd6b29bc64acabf97 -jar /usr/share/jenkins/agent.jar -url http://cbci-nsunny-5650.35.243.248.156.beesdns.com/mc/ -name ext-tcp -secret … -tunnel cbci-nsunny-5650.35.243.248.156.beesdns.com:50001 -workDir /tmp/wd
+        The quick brown dog jumps over the lazy dog docker run --rm --entrypoint java us-east1-docker.pkg.dev/tiger-team-testing/cbci-nsunny-5650/agent:dev-52bc044c93bd7a8dd6b29bc64acabf97 -jar /usr/share/jenkins/agent.jar -url http://cbci-nsunny-5650.35.243.248.156.beesdns.com/mc/ -name ext-tcp -secret … -tunnel cbci-nsunny-5650.35.243.248.156.beesdns.com:50001 -workDir /tmp/wd
         Depending on the network environment, you may also be able to use the NodePort service.
         JNLP_NODE_NAME is not reliable, so we use the external IP of a LoadBalancer instead:
         -tunnel cbci-nsunny-5650.35.243.248.156.beesdns.com:${JNLP_NODE_PORT}
