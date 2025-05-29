@@ -1,0 +1,26 @@
+plugins:
+- id: cloudbees-casc-client
+- id: cloudbees-casc-items-controller
+- id: cloudbees-pipeline-explorer
+- id: cloudbees-ssh-slaves
+- id: cloudbees-workflow-template
+- id: configuration-as-code
+- id: git
+- id: junit
+- id: managed-master-hibernation
+- id: notification-api
+- id: operations-center-cloud
+- id: operations-center-notification
+- id: pipeline-event-step
+- id: pipeline-input-step
+- id: pipeline-milestone-step
+- id: pipeline-model-definition
+- id: ssh-slaves
+- id: workflow-basic-steps
+- id: workflow-multibranch
+- id: docker-commons
+- id: docker-java-api
+- id: docker-plugin
+- id: log-cli
+- id: mock-load-builder
+- id: google-compute-engine

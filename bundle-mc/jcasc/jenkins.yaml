@@ -1,0 +1,201 @@
+jenkins:
+  quietPeriod: 1
+  disabledAdministrativeMonitors:
+  - hudson.diagnosis.TooManyJobsButNoView # TODO symbol tooManyJobsButNoView does not seem to work
+  clouds:
+  - kubernetes:
+      name: kubernetes
+      namespace: cbci-builds
+      templates:
+      - name: minimal-k8s
+        label: minimal-k8s
+  - kubernetes:
+      name: kubernetesWS
+      namespace: cbci-builds
+      webSocket: true
+  - docker:
+      name: docker
+      dockerApi:
+        dockerHost:
+          uri: tcp://dockerd:2375
+      templates:
+      - connector: attach
+        labelString: docker
+        mode: EXCLUSIVE
+        dockerTemplateBase:
+          image: eclipse-temurin:17
+  - computeEngine:
+      cloudName: gce
+      projectId: tiger-team-testing
+      credentialsId: gcp
+      instanceCapStr: '10'
+      noDelayProvisioning: true
+      configurations:
+      - namePrefix: cbci-nsunny-5650-gce
+        description: GCE
+        labelString: gce
+        mode: EXCLUSIVE
+        oneShot: true
+        numExecutorsStr: 1
+        launchTimeoutSecondsStr: 300
+        retentionTimeMinutesStr: 10
+        region: us-east1
+        zone: us-east1-b
+        machineType: https://www.googleapis.com/compute/v1/projects/tiger-team-testing/zones/us-east1-b/machineTypes/n1-standard-2
+        bootDiskType: https://www.googleapis.com/compute/v1/projects/tiger-team-testing/zones/us-east1-b/diskTypes/pd-standard
+        bootDiskSourceImageProject: tiger-team-testing
+        bootDiskSourceImageName: https://www.googleapis.com/compute/v1/projects/tiger-team-testing/global/images/cloudbees-replication-demo-jre
+        provisioningType:
+          spotVm:
+            maxRunDurationSeconds: 259200 # 3 days
+        runAsUser: jenkins
+        bootDiskSizeGbStr: 50
+        bootDiskAutoDelete: true
+        networkConfiguration:
+          autofilled:
+            network: https://www.googleapis.com/compute/v1/projects/tiger-team-testing/global/networks/default
+            subnetwork: https://www.googleapis.com/compute/v1/projects/tiger-team-testing/regions/us-east1/subnetworks/default
+        networkInterfaceIpStackMode:
+          singleStack:
+            externalIPV4Address: false
+        networkTags: cbci-nsunny-5650-allow-ssh
+  - operationsCenterAgentProvisioningService
+  nodes:
+  - permanent:
+      name: ext-tcp
+      remoteFS: /tmp
+      retentionStrategy: always
+      labelString: inbound
+      launcher:
+        inbound: {}
+      nodeDescription: |-
+        If using a public cloud:
+        docker run --rm --entrypoint java us-east1-docker.pkg.dev/tiger-team-testing/cbci-nsunny-5650/agent:dev-52bc044c93bd7a8dd6b29bc64acabf97 -jar /usr/share/jenkins/agent.jar -url http://cbci-nsunny-5650.35.243.248.156.beesdns.com/mc/ -name ext-tcp -secret … -tunnel cbci-nsunny-5650.35.243.248.156.beesdns.com:50001 -workDir /tmp/wd
+        Depending on the network environment, you may also be able to use the NodePort service.
+        JNLP_NODE_NAME is not reliable, so we use the external IP of a LoadBalancer instead:
+        -tunnel cbci-nsunny-5650.35.243.248.156.beesdns.com:${JNLP_NODE_PORT}
+      nodeProperties:
+      - cloudbeesHighAvailabilityMultipleExecutors:
+          numExecutors: 2
+  - permanent:
+      name: ext-ws
+      remoteFS: /tmp
+      retentionStrategy: always
+      labelString: inbound
+      launcher:
+        inbound: {}
+      nodeDescription: |-
+        If using a public cloud:
+        docker run --rm --entrypoint java us-east1-docker.pkg.dev/tiger-team-testing/cbci-nsunny-5650/agent:dev-52bc044c93bd7a8dd6b29bc64acabf97 -jar /usr/share/jenkins/agent.jar -url http://cbci-nsunny-5650.35.243.248.156.beesdns.com/mc/ -name ext-ws -secret … -webSocket -workDir /tmp/wd
+      nodeProperties:
+      - cloudbeesHighAvailabilityMultipleExecutors:
+          numExecutors: 2
+  - permanent:
+      name: ssh
+      remoteFS: /home/jenkins
+      retentionStrategy: cloudbeesHighAvailability
+      labelString: outbound
+      launcher:
+        nioSsh:
+          host: ssh-agent
+          connectionDetails:
+            port: 22
+            credentialsId: ssh-agent
+            displayEnvironment: true
+            keyVerificationStrategy: blindlyTrust
+            suffixStartSlaveCmd: -workDir /home/jenkins
+      nodeProperties:
+      - cloudbeesHighAvailabilityMultipleExecutors:
+          numExecutors: 2
+unclassified:
+  cloudbeesPipelineExplorer:
+    autoPollingEnabled: true
+    autoPollingIntervalSeconds: 3
+    enabled: true
+  usageStatisticsCloudBees:
+    disabledJenkinsUsageStatistics: true
+    usageStatisticsCollected: false
+  stderrLog:
+    targets:
+    - name: com.cloudbees.jenkins.plugins.replication
+      level: FINE
+notificationConfiguration:
+  enabled: true
+  router: operationsCenter
+globalCloudBeesPipelineTemplateCatalog:
+  catalogs:
+    - branchOrTag: "main"
+      scm:
+        git:
+          id: "git-repo"
+          remote: "git://git-daemon.cbci/pipeline-catalog-sample"
+      updateInterval: "1d"
+highAvailability:
+  highAvailabilityConfiguration:
+    developerMode: true
+  highAvailabilityEmulatedBuildStep:
+    enabled: true
+  highAvailabilityQueueThrottler:
+    maximumLoad: 200
+appearance:
+  consoleUrlProvider:
+    providers:
+    - cloudbeesPipelineExplorer
+credentials:
+  system:
+    domainCredentials:
+    - credentials:
+      - usernamePassword:
+          id: login
+          username: user
+          password: s3cr3t
+          scope: GLOBAL
+      - googleRobotMetadata:
+          id: gcp
+          projectId: tiger-team-testing
+      - basicSSHUserPrivateKey:
+          scope: SYSTEM
+          id: ssh-agent
+          username: jenkins
+          privateKeySource:
+            directEntry:
+              # see templates/ssh-agent.yaml; ssh-keygen -t rsa -f /tmp/id_rsa -C test
+              privateKey: |
+                -----BEGIN OPENSSH PRIVATE KEY-----
+                b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
+                NhAAAAAwEAAQAAAYEArp8mRD5ov1fruqX9BqdxI1DoLlCqFQNYJ8MD9JGrKiKLtuEaEFJz
+                HswkFC3zlYi+6HgAwDn/QgU/1uV1sgocUTfkT8hXm0qLn4QYgVoad7RzT2p8mGut54q92i
+                YPUnUyj21YkzFmaEybrZ1UoR2yYRd0rhuZw0uePM7dR8wjrYbHvEYntwKvKFsy5P+SxCtt
+                /CQVBldTRpmdPN5+PGt7uHBgYGpP/qEWN8QGiKL0JDN5mQOrF7ooT9rP67kVexsj28nGf8
+                +ODXvyigg26pmSG7jiqWNEcK4OMEOu7pXQ/UeAjoXTWgvNpyRKC7A6smyxPrDvdgNobvT4
+                ic34BG2qiZFOOovGqkKpJL34+h03Uz2BqFnOlSHr0b2I1O8wKHnm/FTeBX+Tek587jgOTi
+                CGo8LwpqWXMuVLkhSHbLks1Yfuo1VXVmVa5XOhH8xmb93bFFnkwXZZXm56X3+9tdho3pZk
+                TCgk5mFWyPxEwy7iqEqWMLdS1VZHWNhsYNR3jCcbAAAFgHxXA7F8VwOxAAAAB3NzaC1yc2
+                EAAAGBAK6fJkQ+aL9X67ql/QancSNQ6C5QqhUDWCfDA/SRqyoii7bhGhBScx7MJBQt85WI
+                vuh4AMA5/0IFP9bldbIKHFE35E/IV5tKi5+EGIFaGne0c09qfJhrreeKvdomD1J1Mo9tWJ
+                MxZmhMm62dVKEdsmEXdK4bmcNLnjzO3UfMI62Gx7xGJ7cCryhbMuT/ksQrbfwkFQZXU0aZ
+                nTzefjxre7hwYGBqT/6hFjfEBoii9CQzeZkDqxe6KE/az+u5FXsbI9vJxn/Pjg178ooINu
+                qZkhu44qljRHCuDjBDru6V0P1HgI6F01oLzackSguwOrJssT6w73YDaG70+InN+ARtqomR
+                TjqLxqpCqSS9+PodN1M9gahZzpUh69G9iNTvMCh55vxU3gV/k3pOfO44Dk4ghqPC8Kallz
+                LlS5IUh2y5LNWH7qNVV1ZlWuVzoR/MZm/d2xRZ5MF2WV5uel9/vbXYaN6WZEwoJOZhVsj8
+                RMMu4qhKljC3UtVWR1jYbGDUd4wnGwAAAAMBAAEAAAGAJAVicGtrUiVB1EPPWSMLPJzA+G
+                TdYO5KrhEVbMrrwwpTRctThBBt/Olhe+QqviryLqQqi3yrQiQxEhRNXgel5b8g0rBiGf+b
+                o7EtGOnMUesgaj5uK0bzHbNKDIkTWhAg+OM2hU6IcHV1G7A7t+yXUl3zTMMWyel8X9DQZr
+                IenfoSk6zpHmBoX2vIqOJrlRncW0naKG+1FvgzLk47Ph1x7Q8JYnorvDvgiGpgaqkqsZkI
+                uV6/WWqmTCq3/0kzvCxRtwjlP/EC374WglcxF3mEbP6HY+UFYW1HZp1Aq/83o393Vs8Hev
+                3MoMeAo1UkHG3vjiYdbD8pvfIQiQMkzkjEJxMNxi8usnUhTJzqlyyxVyJM3Ep4ieLb358P
+                afSRTpuTVGcP6yf5XqQt7Fne0wRixt1gqcWk6nArXBzChis1oe6ofrakuULSXGTBEvJjMc
+                XKplPJl/RmoYvsyQyezDsyYxenkKAT8H6+wWIE7QbxAcb9uW9BTQIGe3PoL/xYrgnJAAAA
+                wBT555x19WMBrLTFf88DzuYF45SbHUM6t+YJnGQIoym7Dx+GdCRymAM2OSRE3UVjpqL3y/
+                mJW5rtgmE8EII9lZnEI0tKH8p/iGvxaufGFy6BuBDE0mLuwhjXAKN5ZwDUf+QF4gO8AMRf
+                4unhatlGvDGEQbIIG83sMaxUBygHIaFdstybJKxTCmsoc504XV7PoANiOPs8Gi7h9m0YfC
+                yN5jSlnaMNoBD2Y2QecUlNopMFUWcxmWXvlRHI+66xRBJnmAAAAMEAy/31M5cE7SuWky39
+                /wj7v+Oi0urbDC6KBkIfYXFEuhzdd4jZAISMmMX9Kqd/DqKRTN807uf+b7gdpfHNVOLXqo
+                IEJ3MtnD8PkRzafz/lbYB0ZCq+K5pz+0EAZLb0HOiHobpDAJNgwp5SIxmnoEMVgF33xnqq
+                zS7iAAfu/ZpD2T8CwOPJk4eUUy2FPXStqlbV6XgJ0AhgD7yK2SzcASz3slUif/ZY+MEhyM
+                bCHDikRRnbOD/h5I1LwUMd8JkFZ7GlAAAAwQDbJEOBdv24xVfPITTWFFkb56XvMYJJDAIO
+                AX+fBU9UqWZbGFq3WjsUigQvh4DQFKiMr8ivbip7ihF2i/mTZF/uUYgMc0Rlth379uC1PW
+                ScGhrez73wFUSMmSUi08qYLBVVES27z8PG5w2G23U5cMoO9Y9SYrwR/lYZQJBGHBekUfcD
+                Fk9xj/k40Qkpa7wZ8h2wEm2qoHdF0oTM1bwGeYOmNDdlc+4xLXeY70UNLr+/Kf+bTOCaX1
+                2dyXa8piiHmb8AAAAEdGVzdAECAwQFBgc=
+                -----END OPENSSH PRIVATE KEY-----

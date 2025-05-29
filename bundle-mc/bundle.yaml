@@ -1,0 +1,13 @@
+apiVersion: "2"
+id: "mc"
+description: "null"
+version: "1"
+checksum: "1"
+jcasc:
+  - "jcasc/jenkins.yaml"
+plugins:
+  - "plugins/plugins.yaml"
+items:
+  - "items/items.yaml"
+catalog:
+  - "catalog/plugin-catalog.yaml"

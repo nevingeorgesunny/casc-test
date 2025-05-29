@@ -1,0 +1,392 @@
+removeStrategy:
+  rbac: SYNC
+  items: NONE
+items:
+- kind: pipeline
+  name: sample-project
+  description: |
+    This is a sample project using credentials defined in the controller.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        pipeline {
+          agent {
+            kubernetes {
+              cloud 'kubernetes'
+            }
+          }
+          environment {
+            USER_PASS = credentials('login')
+          }
+          stages {
+            stage('all') {
+              steps {
+                sh '''
+                  echo masked: "$USER_PASS"
+                  echo unmasked: `echo "$USER_PASS" | tr [a-z] [A-Z]`
+                '''
+              }
+            }
+          }
+        }
+- kind: pipeline
+  name: milestone
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |-
+        stage('Build/Test') {
+          podTemplate(cloud: 'kubernetes') {
+            retry(count: 2, conditions: [kubernetesAgent(), nonresumable()]) {
+              node(POD_LABEL) {
+                withMockLoad(averageDuration: 180, testFailureIgnore: true) {
+                  sh MOCK_LOAD_COMMAND
+                }
+              }
+            }
+          }
+        }
+        milestone()
+        input message: 'Deploy ?'
+        milestone()
+        stage('Deploy') {
+          sleep 30
+          echo 'Fake deployment'
+        }
+  description: Illustrates the use of the milestone step.
+- kind: pipeline
+  name: slow-node
+  description: |
+    This is a project using a Kubernetes agent in TCP mode.
+    It runs for multiple minutes, allowing replicas to be killed to see how a build can be adopted.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        pipeline {
+          agent {
+            kubernetes {
+              cloud 'kubernetes'
+              retries 2
+            }
+          }
+          stages {
+            stage('all') {
+              steps {
+                sh '''
+                  set +x
+                  env | sort
+                  for x in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
+                  do
+                    echo "Sleep #$x"
+                    date
+                    sleep 10s
+                  done
+                '''
+              }
+            }
+          }
+        }
+- kind: pipeline
+  name: simple
+  description: |
+    This is a simple project running for while without using any agent.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        for (int i = 0; i < 99; i++) {
+            stage("round #$i") {
+               sleep 10
+            }
+        }
+- kind: pipeline
+  name: oc-shared-credentials
+  description: |
+    This is a sample project using credentials defined in Operations Center.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        podTemplate {
+          node(POD_LABEL) {
+            retry(count: 2, conditions: [kubernetesAgent(), nonresumable()]) {
+              withCredentials([usernameColonPassword(credentialsId: 'oc-shared-credentials', variable: 'USER_PASS')]) {
+                sh 'echo unmasked: `echo "$USER_PASS" | tr [a-z] [A-Z]`'
+              }
+            }
+          }
+        }
+- kind: pipeline
+  name: websocket
+  description: |
+    This is a sample project using a Kubernetes agent connecting to the controller using WebSocket.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        podTemplate(cloud: 'kubernetesWS') {
+          retry(count: 2, conditions: [kubernetesAgent(), nonresumable()]) {
+            node(POD_LABEL) {
+              sh 'set +x; env | sort; for x in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do echo "Sleep #$x"; date; sleep 10s; done'
+            }
+          }
+        }
+- kind: pipeline
+  name: using-gce
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        node('gce') {
+            sh 'env | sort; set +x; for x in 1 2 3 4 5 6 7 8 9 10 11 12; do echo "Sleep #$x"; sleep 10s; done'
+        }
+- kind: pipeline
+  name: interactive
+  description: |
+    This is a sample project requiring an interaction with the user to continue.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        input 'Ready to go?'
+- kind: freeStyle
+  name: free
+  description: |
+    This is a sample freestyle project.
+  concurrentBuild: true
+  label: minimal-k8s
+  builders:
+  - shell:
+      command: sleep 60
+- kind: pipeline
+  name: scheduled
+  description: |
+    This is a sample project running on a schedule (every 5 minutes).
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: echo 'OK'
+  properties:
+  - pipelineTriggers:
+      triggers:
+      - cron:
+          spec: '*/5 * * * *'
+- kind: multibranch
+  name: multibranch
+  description: |
+    This is a sample multibranch project.
+    It clones a repository located in git-daemon.
+    Interactions with the repository can be done using the projects multibranch-commit and multibranch-delete-branch.
+  sourcesList:
+  - branchSource:
+      source:
+        git:
+          id: git
+          remote: git://git-daemon.cbci/sample
+          traits:
+          - gitBranchDiscovery: {}
+  orphanedItemStrategy:
+    defaultOrphanedItemStrategy:
+      numToKeep: 1
+      abortBuilds: true
+  trigger:
+    periodicFolderTrigger:
+      interval: 5m
+- kind: pipeline
+  name: multibranch-commit
+  description: |
+    This project generates a commit in the repository hosted in git-daemon on the specified branch (by default, main).
+  properties:
+  - parameters:
+      parameterDefinitions:
+      - string:
+          name: BRANCH
+          defaultValue: main
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        podTemplate(cloud: 'kubernetes') {
+          node(POD_LABEL) {
+            sh '''
+              git clone git://git-daemon.cbci/sample .
+              git checkout $BRANCH || git checkout -b $BRANCH
+              echo "stage('all') {node('minimal-k8s') {sh(/echo 'hello #$BUILD_NUMBER from $BRANCH'; sleep 1m/)}}" > Jenkinsfile
+              git add Jenkinsfile
+              git config --global user.email sample@localhost
+              git config --global user.name Sample
+              git commit -m "touching $BRANCH"
+              git push origin $BRANCH
+              echo "check: ^${JENKINS_URL}job/multibranch/job/$BRANCH/lastBuild/console ^${JENKINS_URL}job/multibranch/indexing/events"
+            '''
+          }
+        }
+- kind: pipeline
+  name: multibranch-delete-branch
+  description: |
+    This project deletes the specified branch in the repository hosted in git-daemon.
+  properties:
+  - parameters:
+      parameterDefinitions:
+      - string:
+          name: BRANCH
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        podTemplate(cloud: 'kubernetes') {
+          node(POD_LABEL) {
+            sh '''
+              [ -n "$BRANCH" ]
+              git clone git://git-daemon.cbci/sample .
+              git push origin :$BRANCH
+              echo "check: ^${JENKINS_URL}job/multibranch/ ^${JENKINS_URL}job/multibranch/indexing/events"
+            '''
+          }
+        }
+- kind: pipeline
+  name: using-shared
+  description: |
+    This is a sample project using a shared agent defined in Operations Center.
+    You must connect the agent to Operations Center manually before running this project.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |-
+        retry(count: 2, conditions: [agent(), nonresumable()]) {
+          node('shared') {
+            sh 'set +x; env | sort; for x in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do echo "Sleep #$x"; date; sleep 10s; done'
+          }
+        }
+- kind: pipeline
+  name: using-ext-tcp
+  description: |
+    This is a sample project using an external agent connected via TCP.
+    You must connect the agent to the controller manually before running this project.
+    If using ingress-nginx, add: --set tcp.50001=cbci/mc:50001
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |-
+        retry(count: 2, conditions: [agent(), nonresumable()]) {
+          node('ext-tcp') {
+            sh 'set +x; env | sort; for c in /proc/[0-9]*/cmdline; do echo $c; tr "\\0" " " <$c || :; echo; done || :; for x in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do echo "Sleep #$x"; date; sleep 10s; done'
+          }
+        }
+- kind: pipeline
+  name: using-ext-ws
+  description: |
+    This is a sample project using an external agent connected via WebSocket.
+    You must connect the agent to the controller manually before running this project.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |-
+        retry(count: 2, conditions: [agent(), nonresumable()]) {
+          node('ext-ws') {
+            sh 'set +x; env | sort; for c in /proc/[0-9]*/cmdline; do echo $c; tr "\\0" " " <$c || :; echo; done; for x in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do echo "Sleep #$x"; date; sleep 10s; done'
+          }
+        }
+- kind: pipeline
+  name: using-ssh
+  description: |
+    This is a sample project using an SSH agent.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |-
+        retry(count: 2, conditions: [agent(), nonresumable()]) {
+          node('ssh') {
+            sh 'set +x; env | sort; for c in /proc/[0-9]*/cmdline; do echo $c; tr "\\0" " " <$c || :; echo; done; for x in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do echo "Sleep #$x"; date; sleep 10s; done'
+          }
+        }
+- kind: pipeline
+  name: event-publish
+  description: |
+    This is a sample project publishing an event.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |-
+        publishEvent simpleEvent('some-example-event')
+- kind: pipeline
+  name: event-trigger
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: echo 'OK'
+  description: |
+    This is a sample project triggered by an event.
+  properties:
+  - pipelineTriggers:
+      triggers:
+      - eventTrigger:
+          condition:
+            simpleMatch:
+              event: some-example-event
+- kind: pipeline
+  name: upstream
+  description: |
+    This is a sample upstream project which builds another downstream project.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        build 'downstream'
+- kind: pipeline
+  name: downstream
+  description: |
+    This is a sample downstream project triggered by an upstream project.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        sleep 60
+- kind: pipeline
+  name: loaded
+  description: |
+    This is a sample project running mock commands to emulate the output of a real build without actually doing anything.
+  quietPeriod: 0
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |-
+        parallel([0, 1, 2, 3, 4].collectEntries {b -> ["branch-$b", {
+          podTemplate(cloud: 'kubernetes') {
+            retry(count: 2, conditions: [kubernetesAgent(), nonresumable()]) {
+              node(POD_LABEL) {
+                stage("build-$b") {
+                  withMockLoad(averageDuration: 180, testFailureIgnore: true) {
+                    sh MOCK_LOAD_COMMAND
+                  }
+                }
+                stage("publish-$b") {
+                  junit 'mock-junit.xml'
+                  archiveArtifacts artifacts: 'mock-artifact-*.txt', fingerprint: true
+                }
+              }
+            }
+          }
+        }]})
+        try {
+          build job: JOB_NAME, wait: false
+          sleep 3
+          build job: JOB_NAME, wait: false
+        } catch (e) {
+          echo "ignoring: $e"
+        }
+- kind: pipeline
+  name: dockerized
+  description: |
+    This is a sample project using a Docker agent.
+  definition:
+    cpsFlowDefinition:
+      sandbox: true
+      script: |
+        retry(count: 2, conditions: [agent(), nonresumable()]) {
+          node('docker') {
+            sh 'set +x; env | sort; for x in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do echo "Sleep #$x"; date; sleep 10s; done'
+          }
+        }

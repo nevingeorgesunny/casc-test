@@ -1,0 +1,14 @@
+type: plugin-catalog
+version: '1'
+name: mc
+configurations:
+- description: Exported plugins
+  includePlugins:
+    docker-java-api:
+      version: 3.2.13-37.vf3411c9828b9
+    docker-plugin:
+      version: 1.2.10
+    log-cli:
+      version: 130.vfdc3ee1dfc56
+    mock-load-builder:
+      version: 105.v1fc7e407a_0b_1
