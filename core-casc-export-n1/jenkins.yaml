@@ -3,7 +3,7 @@ credentials:
     domainCredentials:
     - credentials:
       - aws:
-          accessKey: "dsds"
+          accessKey: "dsds33"
           description: "aws"
           id: "aws"
           scope: GLOBAL
