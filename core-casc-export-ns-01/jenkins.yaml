@@ -30,7 +30,7 @@ jenkins:
           macData:
             sshPort: "22"
         associatePublicIp: false
-        avoidUsingOrphanedNodes: true
+        avoidUsingOrphanedNodes: false
         connectBySSHProcess: false
         connectionStrategy: PUBLIC_IP
         deleteRootOnTermination: false
